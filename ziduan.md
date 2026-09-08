@@ -1,14 +1,16 @@
-# 书遇 · 必须确认的字段名清单（跟 B 对齐）
+# 书遇 · 字段定义（最终合理版 · 定稿）
 
-> 本文档按网页 6 大功能列出**必须一次性定死**的字段名，供 C 与 B 确认。
-> 标记 ★ 的是 C（AI·数据）生命线字段，错名会直接导致私密笔记泄漏进池 / 匹配结果取不到 / 交书友申请无法路由。
-> 约定：字段定死后**不再改名**（不然前后端一起崩）。
+> 依据：`houduan` 分支 `apireadme.md`（40 个接口）+ 团队细化的 6 大功能。
+> 结论：**保留 AI 三栏**（主体/关键词/情绪）、匹配改为**智能匹配**、匹配度用 `matchScore 0~100`。
+> 命名统一 **camelCase**。★ 标记 C（AI·数据）生命线字段，错名会直接导致私密笔记泄漏进池 / 匹配结果取不到 / 书友申请无法路由。
+> **本文件为定稿，之后不再变动。**
 
-## 命名规范（统一使用）
+## 命名规范
 
-- JSON 字段一律 **snake_case**：`recommendation_text`、`similarity_score`
-- id 统一 `*_id`；数组用复数：`topics`、`keywords`、`comments`
-- 布尔用 `is_` 前缀：`is_liked`、`is_favorited`；状态用枚举字符串
+- 字段一律 camelCase：`matchScore`、`reviewStatus`、`isPublic`、`noteId`
+- id 统一 `*Id`；布尔用 `is*`；数组用复数：`topics`、`keywords`、`comments`
+- 统一返回 `{ code, data, message }`，HTTP 恒为 200；code=200 成功 / 400 失败 / 401 需登录
+- 除注册、登录、头像上传外，均用 **Bearer Token**
 
 ---
 
@@ -16,13 +18,17 @@
 
 | 字段 | 类型 | 说明 |
 |---|---|---|
-| `id` | int | 用户 id |
-| `username` | string | 登录名（唯一） |
+| `userId` | int | 用户 id |
+| `email` | string | 登录名，唯一（区别于旧版 username） |
 | `password` | string | 密码（存哈希，勿明文） |
+| `token` | string | 登录返回，有效期默认 7 天 |
+| `expiresAt` | date-time | token 到期时间，UTC |
 | `nickname` | string | 展示名 / 匿名昵称 |
-| `role` | string | `"user"` / `"admin"` —— 决定进用户界面还是管理员界面 |
+| `avatarPath` | string | 头像路径，**必填且不可清空** |
+| `gender` | string | `male`/`female`/`unspecified` |
+| `role` | string | `user`/`admin` —— 决定进用户界面还是管理员界面 |
 
-登录后最简方案：前端只存 `user_id`，请求都带 `user_id`。
+统一登录 `/api/auth/login`（email+password）→ 返回 token → `GET /api/me` 取资料+role，前端按 role 跳转。
 
 ---
 
@@ -30,71 +36,83 @@
 
 | 字段 | 类型 | 说明 |
 |---|---|---|
-| `user_id` | int | 归属用户 |
-| `book_id` | int | 书籍 id |
-| `status` | string | `"reading"` / `"read"` / `"want"` |
-| `title`、`author` | string | 返回时由 B 关联书籍补上，供前端显示 |
+| `userId` | int | 归属用户 |
+| `bookId` | int | 书籍 id |
+| `readingStatus` | string | `wantToRead`(想读) / `reading`(在读) / `read`(已读) |
+| `book` | object | `{ bookId, title, author, coverPath, status }` |
+| `currentReading` | object | 当前阅读 `{ book, updatedAt }`，可设为 null 停止 |
 
 ---
 
-## 3. 笔记上传（公开/私密 + AI 提取主体·关键词·情绪）
+## 3. 笔记上传（私密/公开 + AI 自动提取主体/关键词/情绪）
 
-| 字段 | 类型 | 说明 |
-|---|---|---|
-| `id` | int | 笔记 id（向量索引主键） |
-| `user_id` | int | 上传者 |
-| `book_id` | int | 所属书籍 |
-| `content` | text | 笔记正文（做 embedding 的原文） |
-| `visibility` ★ | string | `"public"` / `"private"` —— 是否进匹配池 |
-| `status` ★ | string | `"pending"` / `"approved"` / `"rejected"` —— 管理员审核 |
-| `topics` | string[] | 主题（AI 提取） |
-| `keywords` | string[] | 关键词（AI 提取） |
-| `sentiment` | string | `"pos"` / `"neu"` / `"neg"`（AI 提取） |
-| `created_at` | datetime | 上传时间 |
+| 字段 | 类型 | 必选 | 说明 |
+|---|---|---|---|
+| `noteId` | int | — | 笔记 id（向量索引主键） |
+| `author` | object | — | `{ userId, nickname, avatarPath }` |
+| `book` | object | — | `{ bookId, title, author, coverPath, status }` |
+| `bookId` | int | 是 | 关联上架书籍 |
+| `content` | text | 是 | 笔记正文（embedding/推荐语原文） |
+| `isPublic` ★ | bool | 否 | `true` 公开（过审后入池）；`false` 私密，不入池。默认 false |
+| `reviewStatus` ★ | string | — | `pending`/`approved`/`rejected`，创建时恒为 `pending` |
+| `reviewReason` | string/null | — | 拒绝原因；通过时 null |
+| `topics` ★ | string[] | — | 主题（AI 上传时实时提取，本次**保留**） |
+| `keywords` ★ | string[] | — | 关键词（AI 上传时实时提取） |
+| `sentiment` ★ | string | — | `pos`/`neu`/`neg`（AI 上传时实时提取） |
+| `createdAt`、`updatedAt`、`deletedAt` | date-time | — | 时间戳；软删除 |
+| `likeCount`/`favoriteCount`/`commentCount` | int | — | 社交统计 |
+| `isLiked`/`isFavorited` | bool | — | 当前用户是否已点赞/收藏 |
 
-**进池规则**：`visibility=public 且 status=approved` 才向量化进池；私密或未过审只存储、不参与匹配。
-
----
-
-## 4. 漂流瓶（书友匹配）
-
-输入：
-
-| 字段 | 类型 | 说明 |
-|---|---|---|
-| `user_id` | int | 发起方 |
-| `note_id` | int | 用户挑的**自己公开**的笔记（作 query） |
-
-输出：`matched_user_id` ★、`matched_note_id` ★、`similarity_score` ★、`recommendation_text` ★、`tier`（可选，S/A/B/C）
-
-| 字段 | 类型 | 说明 |
-|---|---|---|
-| `matched_user_id` ★ | int | 匹配到的人（B 靠它发交书友申请） |
-| `matched_note_id` ★ | int | 匹配到的公开笔记 |
-| `similarity_score` ★ | float(0~1) | 匹配度，越高越接近 |
-| `recommendation_text` ★ | string | 灵魂共振推荐语 |
-| `tier` | string | `"S"`/`"A"`/`"B"`/`"C"`，供前端区分展示 |
-
-申请状态（B 维护）：
-
-| 字段 | 类型 | 说明 |
-|---|---|---|
-| `request_status` | string | `"pending"` / `"accepted"` / `"rejected"` |
+**进池规则**：`isPublic=true 且 reviewStatus=approved` 才入池（创建漂流瓶 + 启动匹配 AI）。私密、未过审、被拒只存储、不参与匹配。
 
 ---
 
-## 5. 读书墙（实时公开笔记 + 点赞/评论/收藏）
+## 4. 漂流瓶（书友匹配 · 核心 RAG）· 智能匹配
 
-前提：只展示 `visibility=public 且 status=approved` 的笔记。
+输入：`GET /api/bottles/matches`
 
 | 字段 | 类型 | 说明 |
 |---|---|---|
-| `like_count` | int | 点赞数 |
-| `is_liked` | bool | 当前用户是否已点赞 |
-| `favorite_count` | int | 收藏数 |
-| `is_favorited` | bool | 当前用户是否已收藏 |
-| `comment_count` | int | 评论数 |
-| `comments` | 对象数组 | 每条 `{ id, note_id, user_id, content, created_at }` |
+| `noteId` | int | 来源笔记：**本人 + approved + 公开 + 未删除**（可选列表来自 `GET /api/me/notes?isPublic=true&reviewStatus=approved`） |
+| `pageNum` | int | 页码，默认 1 |
+| `pageSize` | int | 每页 1~100，默认 10 |
+
+输出：`Page<MatchItem>`（按 `matchScore` 降序，同分按 `bottleId` 降序，分页；`total` 为整个合格候选池数量）
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| `bottleId` ★ | int | 漂流感 ID（候选） |
+| `author` ★ | object | `{ userId, nickname, avatarPath }` —— **即匹配到的人**，对应旧 `matched_user_id` |
+| `book` | object | `{ bookId, title, author, coverPath, status }` |
+| `status` | string | `active`/`expired`/`withdrawn` |
+| `aiStatus` ★ | string | `pending`/`processing`/`ready`/`failed` —— AI 处理状态 |
+| `createdAt` | date-time | 实际入池时间（审核通过且公开后），非提交时间 |
+| `expiresAt` | date-time | 入池后 7 天，UTC |
+| `contentPreview` | string | 正文前 100 字 |
+| `noteId` ★ | int | 候选原笔记 id（点赞/收藏/评论用这个，不是 bottleId） |
+| `recommendation` ★ | string/null | AI 推荐语，1~100 字；生成失败为 null，不影响分数 |
+| `matchScore` ★ | number | 匹配度 **0~100**，前端显示百分比（如 86.5%），**非原始向量距离**，绝不虚构 |
+
+**匹配规则**：智能匹配（按内容相似度），**非随机**；候选排除 本人 / 已获取 / 过期 / 撤回 / 原笔记未过审或非公开 / 已删除 / AI 未就绪。
+**获取流程**：列表浏览不产生记录；**点开某条**才生成 `interactionId` → `POST` 发书友申请 → 对方 `accept`/`reject`。
+
+---
+
+## 5. 读书墙（实时公开笔记 + 点赞 / 评论 / 收藏）
+
+前提：只展示 `isPublic=true 且 reviewStatus=approved` 的笔记。
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| `noteId` | int | 原笔记 id（点赞/收藏/评论绑定它，不是 bottleId） |
+| `author` | object | `{ userId, nickname, avatarPath }` |
+| `content` | text | 正文 |
+| `likeCount` / `isLiked` | int / bool | 点赞 |
+| `favoriteCount` / `isFavorited` | int / bool | 收藏 |
+| `commentCount` | int | 评论数 |
+| `comments` | object[] | 每条 `{ commentId, noteId, author, content, createdAt, canDelete }` |
+
+实时滚动为 WebSocket（可选，D4 有余力再做）。
 
 ---
 
@@ -102,14 +120,19 @@
 
 | 字段 | 类型 | 说明 |
 |---|---|---|
-| `status` ★ | string | 笔记审核：`pending` → `approved` / `rejected` |
-| `reviewed_by` | int | 审核管理员 id |
-| `book` 字段 | object | `{ id, title, author, description, cover_url }` |
+| `reviewStatus` ★ | string | 审核：`pending` → `approved`/`rejected` |
+| `reviewReason` | string/null | 拒绝时必填（1~500 字）；通过时 null |
+| `reviewedBy` | int | 审核管理员 id |
+| 书籍 `book` | object | `{ bookId, title, author, isbn, coverPath, intro, status, createdAt, updatedAt }` |
 
 ---
 
-## 需要 C 与 B 一起拍板（3 项）
+## C 与 B 已敲定的决定（定稿）
 
-- [ ] `Top-N` 返回几条（建议 3~5，C 默认按 3，config 可调）
-- [ ] 匹配度给用户看：原始百分比，还是映射成"契合度 60%~99%"（建议后者）
-- [ ] 审核通过才进池，还是上传即进池（建议：上传即提取元信息、**审核通过才入池**）
+- 匹配 = **智能匹配**（按 matchScore），弃用"随机匹配"
+- 保留 **AI 三栏**（`topics`/`keywords`/`sentiment`），上传时实时提取，独立于匹配 AI
+- 匹配度用 **`matchScore` 0~100**，由 C 从余弦相似度真实归一化，绝不虚构
+- 私密/未过审/被拒笔记 **不入池**
+
+> 唯一未落定细节：`matchScore 0~100` 的具体归一化公式（C 实现，保证"计算失败不返回虚构分数"）。
+
