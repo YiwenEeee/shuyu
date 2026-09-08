@@ -94,13 +94,23 @@
 | `matchScore` ★ | number | 匹配度 **0~100**，前端显示百分比（如 86.5%），**非原始向量距离**，绝不虚构 |
 
 **匹配规则**：智能匹配（按内容相似度），**非随机**；候选排除 本人 / 已获取 / 过期 / 撤回 / 原笔记未过审或非公开 / 已删除 / AI 未就绪。
-**获取流程**：列表浏览不产生记录；**点开某条**才生成 `interactionId` → `POST` 发书友申请 → 对方 `accept`/`reject`。
+**获取流程**：列表浏览不产生记录；**点开某条**才生成 `interactionId` → `POST` 发书友申请 → 对方 `accept`/`reject`；对方 `accept` 后即成为**书友**，落库 `书友关系`（见下）。
+
+**书友关系**（对方 `accept` 后落库；`friendId` 即匹配候选返回的 `author.userId`）：
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| `id` | int | 关系 id |
+| `userId` | int | 主动发起书友申请的人 |
+| `friendId` | int | 书友用户 id（被 accept 的一方），即匹配候选 `author.userId` |
+| `status` | string | `pending`/`accepted`/`rejected` |
+| `createdAt` | date-time | 关系创建时间，UTC |
 
 ---
 
 ## 5. 读书墙（实时公开笔记 + 点赞 / 评论 / 收藏）
 
-前提：只展示 `isPublic=true 且 reviewStatus=approved` 的笔记。
+前提：只展示**我的书友（已 `accept` 的匹配好友）** 的读书笔记，即 `author.userId ∈ 我的书友集合` 且 `isPublic=true 且 reviewStatus=approved`。
 
 | 字段 | 类型 | 说明 |
 |---|---|---|
@@ -135,4 +145,3 @@
 - 私密/未过审/被拒笔记 **不入池**
 
 > 唯一未落定细节：`matchScore 0~100` 的具体归一化公式（C 实现，保证"计算失败不返回虚构分数"）。
-
