@@ -43,6 +43,16 @@ class VectorStore:
             self._vectors[note_id] = np.asarray(vector, dtype=np.float32)
             self._save()
 
+    def delete(self, note_id: int) -> None:
+        """把笔记移出池（转私密 / 被拒 / 删除时用）。"""
+        with self._lock:
+            if note_id in self._vectors:
+                del self._vectors[note_id]
+                self._save()
+
+    def contains(self, note_id: int) -> bool:
+        return note_id in self._vectors
+
     def search(
         self, query: List[float], top_n: int, exclude_ids: set[int] | None = None
     ) -> List[Tuple[int, float]]:

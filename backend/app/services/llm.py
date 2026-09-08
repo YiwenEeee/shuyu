@@ -6,6 +6,7 @@ OpenAI 兼容接口。同样提供 mock 模式用于本地验证。
 from __future__ import annotations
 
 import os
+import json
 from typing import Optional
 
 from .rag_config import config
@@ -57,3 +58,50 @@ def chat(prompt: str, system: Optional[str] = None) -> str:
     )
     resp.raise_for_status()
     return resp.json()["choices"][0]["message"]["content"].strip()
+
+
+def _mock_extract_meta(content: str) -> dict:
+    return {"topics": ["读书感悟"], "keywords": ["共鸣"], "sentiment": "neu"}
+
+
+def extract_meta(content: str) -> dict:
+    """上传笔记时提取主体(topics)、关键词(keywords)、情绪(sentiment)。"""
+    if MOCK:
+        return _mock_extract_meta(content)
+
+    import httpx
+
+    api_key = os.getenv("DEEPSEEK_API_KEY")
+    if not api_key:
+        raise LLMError("缺少 DEEPSEEK_API_KEY")
+
+    system = (
+        "你是图书笔记分析助手。只输出 JSON，不要其他文字。"
+        '格式：{"topics": [字符串数组], "keywords": [字符串数组], "sentiment": "pos|neu|neg"}'
+    )
+    prompt = f"请分析下面这条读书笔记更短一些：\n{content}"
+    resp = httpx.post(
+        DEEPSEEK_URL,
+        headers={"Authorization": f"Bearer {api_key}"},
+        json={
+            "model": LLM_MODEL,
+            "messages": [
+                {"role": "system", "content": system},
+                {"role": "user", "content": prompt},
+            ],
+            "temperature": 0.2,
+            "max_tokens": 200,
+        },
+        timeout=60,
+    )
+    resp.raise_for_status()
+    text = resp.json()["choices"][0]["message"]["content"].strip()
+    # 宽容解析：去掉可能的 ```json 包裹
+    if text.startswith("```"):
+        text = text.strip("`")
+        if text.lower().startswith("json"):
+            text = text[4:]
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError as exc:
+        raise LLMError(f"AI 元信息返回非 JSON: {text}") from exc
