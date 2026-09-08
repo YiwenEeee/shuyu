@@ -1,13 +1,16 @@
-"""LLM 服务：调用 DeepSeek 生成推荐语 / 提取元信息。
+"""LLM 服务：DeepSeek。
 
-OpenAI 兼容接口。同样提供 mock 模式用于本地验证。
+两类 AI 任务（互相独立）：
+  1. extract_meta(content)        —— 上传时实时提取 主体/关键词/情绪（AI 三栏）
+  2. generate_recommendation(...) —— 匹配时生成推荐语（1~100 字）
+提供 mock 模式用于无 key 本地验证。
 """
 
 from __future__ import annotations
 
-import os
 import json
-from typing import Optional
+import os
+from typing import List, Optional
 
 from .rag_config import config
 
@@ -20,31 +23,19 @@ class LLMError(RuntimeError):
     """LLM 调用失败。"""
 
 
-def _mock_chat(messages) -> str:
-    """mock：直接把用户侧提示拼一段，保证链路能通。"""
-    user = messages[-1]["content"] if messages else ""
-    # 简化：取提示里的笔记切片，示意"AI 生成的推荐语"
-    return "（mock 推荐语）你们在这段文字里遇到了彼此——" + user[:40]
-
-
-def chat(prompt: str, system: Optional[str] = None) -> str:
-    """单一文本提示调用 DeepSeek，返回生成文本。"""
+def _chat(prompt: str, system: Optional[str] = None, max_tokens: int = 0) -> str:
     if MOCK:
-        return _mock_chat(
-            [{"role": "system", "content": system or ""}, {"role": "user", "content": prompt}]
-        )
+        return _MOCK_CHAT(prompt)
 
     import httpx
 
     api_key = os.getenv("DEEPSEEK_API_KEY")
     if not api_key:
         raise LLMError("缺少 DEEPSEEK_API_KEY")
-
     messages = []
     if system:
         messages.append({"role": "system", "content": system})
     messages.append({"role": "user", "content": prompt})
-
     resp = httpx.post(
         DEEPSEEK_URL,
         headers={"Authorization": f"Bearer {api_key}"},
@@ -52,7 +43,7 @@ def chat(prompt: str, system: Optional[str] = None) -> str:
             "model": LLM_MODEL,
             "messages": messages,
             "temperature": config.llm_temperature,
-            "max_tokens": config.llm_max_tokens,
+            "max_tokens": max_tokens or config.llm_max_tokens,
         },
         timeout=60,
     )
@@ -60,48 +51,71 @@ def chat(prompt: str, system: Optional[str] = None) -> str:
     return resp.json()["choices"][0]["message"]["content"].strip()
 
 
-def _mock_extract_meta(content: str) -> dict:
-    return {"topics": ["读书感悟"], "keywords": ["共鸣"], "sentiment": "neu"}
+def _MOCK_CHAT(prompt: str) -> str:
+    # 简化 mock：返回一句示意文本，保证链路可跑
+    return "这本书里，你们读到了彼此想说的那一句。"
 
 
 def extract_meta(content: str) -> dict:
-    """上传笔记时提取主体(topics)、关键词(keywords)、情绪(sentiment)。"""
+    """上传时：AI 提取主体(topics)、关键词(keywords)、情绪(sentiment)。"""
     if MOCK:
-        return _mock_extract_meta(content)
-
-    import httpx
-
-    api_key = os.getenv("DEEPSEEK_API_KEY")
-    if not api_key:
-        raise LLMError("缺少 DEEPSEEK_API_KEY")
+        return {"topics": ["读书感悟"], "keywords": ["共鸣"], "sentiment": "neu"}
 
     system = (
         "你是图书笔记分析助手。只输出 JSON，不要其他文字。"
         '格式：{"topics": [字符串数组], "keywords": [字符串数组], "sentiment": "pos|neu|neg"}'
     )
-    prompt = f"请分析下面这条读书笔记更短一些：\n{content}"
-    resp = httpx.post(
-        DEEPSEEK_URL,
-        headers={"Authorization": f"Bearer {api_key}"},
-        json={
-            "model": LLM_MODEL,
-            "messages": [
-                {"role": "system", "content": system},
-                {"role": "user", "content": prompt},
-            ],
-            "temperature": 0.2,
-            "max_tokens": 200,
-        },
-        timeout=60,
+    out = _chat(f"请分析下面这条读书笔记：\n{content}", system=system)
+    out = _strip_code_fence(out)
+    try:
+        data = json.loads(out)
+        return {
+            "topics": list(data.get("topics", [])),
+            "keywords": list(data.get("keywords", [])),
+            "sentiment": str(data.get("sentiment", "neu")),
+        }
+    except json.JSONDecodeError as exc:
+        raise LLMError(f"AI 元信息返回非 JSON: {out}") from exc
+
+
+def generate_recommendation(
+    source_content: str,
+    candidate_contents: List[str],
+    scores: List[float],
+) -> Optional[str]:
+    """匹配时：基于来源笔记 + 候选原文与相似度，生成推荐语（1~100 字）。
+
+    生成失败返回 None（不影响 matchScore 与排序）。
+    """
+    if not candidate_contents:
+        return None
+    if MOCK:
+        # 演示：返回示意推荐语；可模拟失败返回 None
+        return "你们的文字都关注同一处感受，可以聊聊。"
+
+    system = (
+        "你是一个懂读书、擅长用文字连接同频者的推荐官。"
+        "请用不超过 100 字、真诚有温度地写一段推荐语，说明两个人笔记里的共鸣点。"
+        "不要用『亲』『您』，不要堆砌感叹号。只输出推荐语本身。"
     )
-    resp.raise_for_status()
-    text = resp.json()["choices"][0]["message"]["content"].strip()
-    # 宽容解析：去掉可能的 ```json 包裹
+    cand_lines = "\n".join(
+        f"- (匹配度 {s:.0f}%) {c[:80]}" for c, s in zip(candidate_contents, scores)
+    )
+    try:
+        return _chat(
+            f"用户 A 的摘录：\n{source_content[:200]}\n\n"
+            f"与TA最相近的用户 B 的摘录：\n{cand_lines}\n\n请写推荐语。",
+            system=system,
+            max_tokens=120,
+        )
+    except LLMError:
+        return None
+
+
+def _strip_code_fence(text: str) -> str:
     if text.startswith("```"):
         text = text.strip("`")
         if text.lower().startswith("json"):
             text = text[4:]
-    try:
-        return json.loads(text)
-    except json.JSONDecodeError as exc:
-        raise LLMError(f"AI 元信息返回非 JSON: {text}") from exc
+    return text.strip()
+

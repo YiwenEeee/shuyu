@@ -1,4 +1,4 @@
 # RAG 链路依赖（C 侧）
 httpx>=0.27
 numpy>=1.26
-
+python-dotenv>=1.0
