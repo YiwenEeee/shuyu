@@ -99,6 +99,22 @@
 
 **C 侧流程（关键）**：上传后 `reviewStatus` 恒为 `pending`；公开笔记经管理员审核 `approved` 后，后端才创建 `aiStatus=pending` 的漂流瓶；C 完成向量化后再标记为 `ready`，才能被匹配接口查到。
 
+#### D3 · 联调待办 / 验收清单（C）
+
+**C 侧接口口径（最终结论）**：`match()` 只返回 `matchScore >= 55` 的候选，按真实分数降序；全量 11 字段；`recommendation` 只对 Top3 生成，其余 `null`；aiStatus 流 `pending → processing → ready / failed`，只有 `ready` 参与匹配。
+
+- [ ] B 直连 `from app.services.rag_service import rag`，审核通过时调 `publish_note`、成功后调 `mark_ai_ready`、匹配接口调 `match`。
+- [ ] B `.env` 填真 key（`SILICONFLOW_API_KEY` / `DEEPSEEK_API_KEY`）、`RAG_MOCK=0`；单 worker（`uvicorn --workers 1`）。
+- [ ] B 捕获 `EmbeddingError` → 该笔记 `aiStatus=failed`。
+- [ ] C 验收：`/api/health` 通。
+- [ ] C 验收：`POST /api/notes` 返回 `noteId` + `topics/keywords/sentiment`。
+- [ ] C 验收：审核通过入池后 `aiStatus=processing`，`mark_ai_ready` 后 `ready`。
+- [ ] C 验收：`GET /api/bottles/matches` 只返回 `matchScore>=55`、降序、11 字段、Top3 有 `recommendation`。
+- [ ] C 验收：`ready` 之前匹配查不到，之后才出现。
+- [ ] 对齐 A：只展示 ≥55；`recommendation` 可空；`noteId` 绑交互、`bottleId` 是漂流瓶 ID。
+- [ ] 提醒：mock 模式返回空（mock 相似度被 ≥55 过滤），演示用真实模式。
+- [ ] Vibe 日志 ④。
+
 ### D4 大后天 · 测试 + 文档 + 读书墙（可选）
 
 - [ ] 补测试、修 bug
