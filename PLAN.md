@@ -115,6 +115,13 @@
 - [ ] 提醒：mock 模式返回空（mock 相似度被 ≥55 过滤），演示用真实模式。
 - [ ] Vibe 日志 ④。
 
+**联调测试账号**
+
+| 角色 | 邮箱 | 密码 | 预期 |
+|---|---|---|---|
+| 普通用户 | `reader.demo2026@shuyu-test.com` | `ShuyuDemo2026!` | 登录后 `GET /api/me` 返回 `role=user`，进用户主页 |
+| 管理员 | `admin.demo2026@shuyu-test.com` | `ShuyuDemo2026!` | 登录后 `GET /api/me` 返回 `role=admin`，进管理员主页 |
+
 ### D4 大后天 · 测试 + 文档 + 读书墙（可选）
 
 - [ ] 补测试、修 bug
