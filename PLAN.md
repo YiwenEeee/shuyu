@@ -107,7 +107,7 @@
 
 - [x] B 直连 `from app.services.rag_service import rag`，审核通过时调 `publish_note`、成功后调 `mark_ai_ready`、匹配接口调 `match`。
 - [x] B `.env` 填真 key（`SILICONFLOW_API_KEY` / `DEEPSEEK_API_KEY`）、`RAG_MOCK=0`；单 worker（`uvicorn --workers 1`）。
-- [ ] B 捕获 `EmbeddingError` → 该笔记 `aiStatus=failed`。
+- [x] B 捕获 `EmbeddingError` → 该笔记 `aiStatus=failed`（B 确认：embedding 失败会将 SQLite 漂流瓶 `aiStatus` 置为 `failed`，不会误标 `ready`，不进匹配池）。
 - [x] C 验收：`/api/health` 通。
 - [x] C 验收：`POST /api/notes` 返回 `noteId` + `topics/keywords/sentiment`。
 - [x] C 验收：审核通过入池后 `aiStatus=processing`，`mark_ai_ready` 后 `ready`。
