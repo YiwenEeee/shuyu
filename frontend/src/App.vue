@@ -34,7 +34,7 @@ async function request(path, options = {}) {
     const res = await fetch(path, { ...options, headers })
     json = await res.json()
   } catch (e) {
-    // 后端没启动 / 代理 502 / 非 JSON 响应：按失败返回，让调用方走 PREVIEW_MODE 兜底
+    // 后端没启动 / 代理 502 / 非 JSON 响应：按失败返回
     return { code: -1, data: null, message: '后端未连接' }
   }
   if (json.code === 401) {
@@ -43,29 +43,6 @@ async function request(path, options = {}) {
   }
   return json
 }
-
-// ========== 临时预览数据（后端接口没做前，先填假数据看效果；B 接口好了后删掉这里 + 相关 fallback） ==========
-const PREVIEW_MODE = true
-
-const previewBooks = [
-  { bookId: 1, title: '百年孤独', author: '加西亚·马尔克斯', readingStatus: 'reading', intro: '魔幻现实主义代表作，布恩迪亚家族七代人的传奇。', isbn: '9787544253994' },
-  { bookId: 4, title: '围城', author: '钱钟书', readingStatus: 'reading', intro: '城外的人想冲进去，城里的人想逃出来。', isbn: '9787020024750' },
-  { bookId: 2, title: '三体', author: '刘慈欣', readingStatus: 'wantToRead', intro: '中国科幻里程碑，人类文明与三体文明的生死博弈。', isbn: '9787536692930' },
-  { bookId: 5, title: '小王子', author: '圣埃克苏佩里', readingStatus: 'wantToRead', intro: '写给大人的童话，关于爱与责任。', isbn: '9787020042494' },
-  { bookId: 3, title: '活着', author: '余华', readingStatus: 'read', intro: '一个人和他命运之间的友情，讲述苦难中的坚韧。', isbn: '9787506365437' },
-  { bookId: 6, title: '平凡的世界', author: '路遥', readingStatus: 'read', intro: '普通人在大时代历史进程中的奋斗与挣扎。', isbn: '9787506376040' },
-]
-
-const previewNotes = [
-  { noteId: 101, bookId: 1, bookTitle: '百年孤独', content: '许多年之后，面对行刑队，奥雷里亚诺·布恩迪亚上校将会回想起父亲带他去见识冰块的那个遥远的下午。\n\n开头就把过去、现在、未来折叠在一起，太惊艳了。', isPublic: true, reviewStatus: 'approved', createdAt: '2026-09-01' },
-  { noteId: 102, bookId: 1, bookTitle: '百年孤独', content: '家族的第一个人被捆在树上，最后一个人正被蚂蚁吃掉。\n\n宿命的循环感扑面而来。', isPublic: false, reviewStatus: 'pending', createdAt: '2026-09-03' },
-  { noteId: 103, bookId: 3, bookTitle: '活着', content: '人是为了活着本身而活着，而不是为了活着之外的任何事物而活着。\n\n这句话回答了整本书的题眼。', isPublic: true, reviewStatus: 'approved', createdAt: '2026-08-28' },
-  { noteId: 104, bookId: 2, bookTitle: '三体', content: '给岁月以文明，而不是给文明以岁月。\n\n', isPublic: true, reviewStatus: 'approved', createdAt: '2026-09-05' },
-  { noteId: 105, bookId: 2, bookTitle: '三体', content: '\n\n把文明的尺度拉到宇宙级别，读完久久不能平静。', isPublic: false, reviewStatus: 'pending', createdAt: '2026-09-06' },
-  { noteId: 106, bookId: 4, bookTitle: '围城', content: '婚姻是一座围城，城外的人想进去，城里的人想出来。\n\n不止婚姻，人生处处是围城。', isPublic: true, reviewStatus: 'approved', createdAt: '2026-09-06' },
-  { noteId: 107, bookId: 6, bookTitle: '平凡的世界', content: '生活不能等待别人来安排，要自己去争取和奋斗。\n\n孙少平让我看到平凡人身上的光。', isPublic: true, reviewStatus: 'approved', createdAt: '2026-09-07' },
-  { noteId: 108, bookId: 5, bookTitle: '小王子', content: '真正重要的东西，用眼睛是看不见的，要用心去看。\n\n长大了才读懂这句话。', isPublic: false, reviewStatus: 'pending', createdAt: '2026-09-08' },
-]
 
 // ========== 书单数据 ==========
 const shelfTab = ref('all') // all 全部 / reading 在读 / wantToRead 想读 / read 已读
@@ -88,15 +65,9 @@ async function loadShelf() {
         ...item.book,
         readingStatus: item.readingStatus,
       }))
-    } else if (PREVIEW_MODE) {
-      shelfBooks.value = [...previewBooks]
     }
   } catch (e) {
-    if (PREVIEW_MODE) {
-      shelfBooks.value = [...previewBooks]
-    } else {
-      alert(e.message || '加载书单失败')
-    }
+    alert(e.message || '加载书单失败')
   } finally {
     shelfLoading.value = false
   }
@@ -152,6 +123,78 @@ async function confirmRemoveBook(book) {
   }
 }
 
+// ========== 加书到书单 ==========
+const showAddBook = ref(false)
+const addBookQuery = ref('')
+const addBookOptions = ref([])
+const addBookLoading = ref(false)
+const addingBookId = ref(null)
+const toastMsg = ref('')
+const toastShow = ref(false)
+let toastTimer = null
+
+// 当前书单里每本书的状态，用于标记「已加入」
+const shelfStatusMap = computed(() => {
+  const m = {}
+  shelfBooks.value.forEach((b) => {
+    m[b.bookId] = b.readingStatus
+  })
+  return m
+})
+
+function showToast(msg) {
+  toastMsg.value = msg
+  toastShow.value = true
+  if (toastTimer) clearTimeout(toastTimer)
+  toastTimer = setTimeout(() => {
+    toastShow.value = false
+  }, 2000)
+}
+
+async function openAddBook() {
+  showAddBook.value = true
+  addBookQuery.value = ''
+  await searchAddBooks()
+}
+
+async function searchAddBooks() {
+  addBookLoading.value = true
+  try {
+    const q = addBookQuery.value.trim()
+    const url = q
+      ? `/api/books?keyword=${encodeURIComponent(q)}&pageSize=20`
+      : '/api/books?pageSize=20'
+    const json = await request(url)
+    if (json.code === 200) {
+      addBookOptions.value = json.data.list || []
+    }
+  } catch (e) {
+    // 搜索失败静默，保留现有列表
+  } finally {
+    addBookLoading.value = false
+  }
+}
+
+async function addToShelf(book, status) {
+  addingBookId.value = book.bookId
+  try {
+    const json = await request('/api/me/books', {
+      method: 'PUT',
+      body: JSON.stringify({ bookId: book.bookId, readingStatus: status }),
+    })
+    if (json.code === 200) {
+      await loadShelf()
+      showToast(`已加入${statusText[status]}`)
+    } else {
+      alert(json.message || '添加失败')
+    }
+  } catch (e) {
+    alert(e.message || '添加失败')
+  } finally {
+    addingBookId.value = null
+  }
+}
+
 // 点开一本书，进入它的详情页（拉完整详情，含 intro/isbn）
 async function openBookDetail(book) {
   if (shelfManage.value) return
@@ -197,16 +240,12 @@ const selectedBook = ref(null)
 async function searchBooks() {
   const q = bookSearch.value.trim()
   if (!q) {
-    bookOptions.value = PREVIEW_MODE ? [...previewBooks] : []
+    bookOptions.value = []
     return
   }
   const json = await request(`/api/books?keyword=${encodeURIComponent(q)}&pageSize=20`)
   if (json.code === 200) {
     bookOptions.value = json.data.list || []
-  } else if (PREVIEW_MODE) {
-    bookOptions.value = previewBooks.filter(
-      (b) => b.title.includes(q) || b.author.includes(q)
-    )
   }
 }
 
@@ -220,7 +259,7 @@ function pickBook(book) {
 function onBookFocus() {
   bookSearch.value = ''
   bookOpen.value = true
-  bookOptions.value = PREVIEW_MODE ? [...previewBooks] : []
+  bookOptions.value = []
 }
 
 function onBookInput() {
@@ -250,8 +289,6 @@ async function loadMyNotes() {
       reviewReason: n.reviewReason,
       createdAt: n.createdAt,
     }))
-  } else if (PREVIEW_MODE) {
-    myNotes.value = [...previewNotes]
   }
 }
 
@@ -296,21 +333,6 @@ async function submitNote() {
       noteForm.value.quote = ''
       noteForm.value.comment = ''
       await loadMyNotes()
-    } else if (PREVIEW_MODE) {
-      // 预览模式：后端没接口，伪造成功 + 假 AI 结果，方便看效果
-      lastAiResult.value = previewAiResult(content)
-      myNotes.value.unshift({
-        noteId: Date.now(),
-        bookId: noteForm.value.bookId,
-        bookTitle: selectedBook.value?.title || '',
-        content,
-        isPublic: noteForm.value.isPublic,
-        reviewStatus: 'pending',
-        createdAt: '刚刚',
-      })
-      noteForm.value.quote = ''
-      noteForm.value.comment = ''
-      alert('（预览）笔记已保存，AI 提取如下')
     } else {
       alert(json.message || '上传失败')
     }
@@ -321,38 +343,9 @@ async function submitNote() {
   }
 }
 
-// 预览模式临时造一份 AI 结果（后端接口好了后删掉）
-function previewAiResult(content) {
-  const words = (content || '')
-    .split(/[\n，。！？、\s]+/)
-    .filter(Boolean)
-    .slice(0, 3)
-  const sentiment = /(孤独|痛苦|悲伤|难过|绝望|失去|死)/.test(content)
-    ? 'neg'
-    : /(喜欢|感动|希望|美好|温暖|爱)/.test(content)
-      ? 'pos'
-      : 'neu'
-  return { topics: ['文学', '感悟'], keywords: words, sentiment }
-}
-
 // ========== 页面跳转 ==========
 function go(page) {
   currentPage.value = page
-}
-
-// （临时）预览主页用，等后端登录接口做好后删除
-function previewHome() {
-  const role = loginRole.value
-  currentUser.value = { id: 1, username: 'test', nickname: '测试用户', role }
-  if (role === 'admin') {
-    currentPage.value = 'admin'
-    loadAdminNotes()
-    loadAdminBooks()
-  } else {
-    currentPage.value = 'home'
-    loadShelf()
-    loadMyNotes()
-  }
 }
 
 // ========== 页面一加载就做两件事 ==========
@@ -378,17 +371,11 @@ async function handleLogin() {
       token.value = json.data.token
       localStorage.setItem('token', json.data.token)
       await loadMe()
-    } else if (PREVIEW_MODE) {
-      await loadMe()
     } else {
       alert(json.message || '登录失败')
     }
   } catch (e) {
-    if (PREVIEW_MODE) {
-      await loadMe()
-    } else {
-      alert(e.message || '登录失败')
-    }
+    alert(e.message || '登录失败')
   }
 }
 
@@ -402,19 +389,6 @@ async function loadMe() {
       loadAdminNotes()
       loadAdminBooks()
     } else {
-      loadShelf()
-      loadMyNotes()
-    }
-  } else if (PREVIEW_MODE) {
-    // 后端接口没做，预览模式直接伪造登录态进对应界面
-    const role = loginRole.value
-    currentUser.value = { userId: 1, username: 'yulan', nickname: '书友小A', role }
-    if (role === 'admin') {
-      currentPage.value = 'admin'
-      loadAdminNotes()
-      loadAdminBooks()
-    } else {
-      currentPage.value = 'home'
       loadShelf()
       loadMyNotes()
       refreshFriendBadge()
@@ -491,26 +465,10 @@ const adminBookSearch = ref('')
 const editingBookId = ref(null)
 const editBookForm = ref({ title: '', author: '', isbn: '', intro: '', status: 'active' })
 
-const previewAdminNotes = [
-  { noteId: 201, author: { userId: 2, nickname: '山间读者' }, book: { bookId: 1, title: '百年孤独' }, content: '许多年之后，面对行刑队，奥雷里亚诺·布恩迪亚上校将会回想起父亲带他去见识冰块的那个遥远的下午。\n\n开头就把过去、现在、未来折叠在一起。', isPublic: true, reviewStatus: 'pending', reviewReason: null, createdAt: '2026-09-07' },
-  { noteId: 202, author: { userId: 3, nickname: '云端旅人' }, book: { bookId: 2, title: '三体' }, content: '给岁月以文明，而不是给文明以岁月。\n\n', isPublic: true, reviewStatus: 'pending', reviewReason: null, createdAt: '2026-09-07' },
-  { noteId: 203, author: { userId: 4, nickname: '林间书虫' }, book: { bookId: 3, title: '活着' }, content: '人是为了活着本身而活着，而不是为了活着之外的任何事物而活着。\n\n这句话回答了整本书的题眼。', isPublic: true, reviewStatus: 'approved', reviewReason: null, createdAt: '2026-09-05' },
-  { noteId: 204, author: { userId: 5, nickname: '夜读人' }, book: { bookId: 1, title: '百年孤独' }, content: '家族的第一个人被捆在树上，最后一个人正被蚂蚁吃掉。\n\n宿命的循环感扑面而来。', isPublic: true, reviewStatus: 'rejected', reviewReason: '请补充自己的读书感受，删除无关广告。', createdAt: '2026-09-04' },
-]
-
-const previewAdminBooks = [
-  { bookId: 1, title: '百年孤独', author: '加西亚·马尔克斯', isbn: '9787544253994', intro: '魔幻现实主义代表作，布恩迪亚家族七代人的传奇。', status: 'active' },
-  { bookId: 2, title: '三体', author: '刘慈欣', isbn: '9787536692930', intro: '中国科幻里程碑，人类文明与三体文明的生死博弈。', status: 'active' },
-  { bookId: 3, title: '活着', author: '余华', isbn: '9787506365437', intro: '一个人和他命运之间的友情，讲述苦难中的坚韧。', status: 'active' },
-  { bookId: 4, title: '追风筝的人', author: '卡勒德·胡赛尼', isbn: '', intro: '', status: 'inactive' },
-]
-
 async function loadAdminNotes() {
   const json = await request('/api/admin/notes?pageSize=100')
   if (json.code === 200) {
     adminNotes.value = json.data.list || []
-  } else if (PREVIEW_MODE) {
-    adminNotes.value = [...previewAdminNotes]
   }
 }
 
@@ -534,8 +492,6 @@ async function loadAdminBooks() {
   const json = await request('/api/admin/books?pageSize=100')
   if (json.code === 200) {
     adminBooks.value = json.data.list || []
-  } else if (PREVIEW_MODE) {
-    adminBooks.value = [...previewAdminBooks]
   }
 }
 
@@ -554,13 +510,10 @@ const filteredAdminBooks = computed(() => {
 
 async function approveNote(note) {
   const json = await request(`/api/admin/notes/${note.noteId}/review`, {
-    method: 'PATCH',
+    method: 'PUT',
     body: JSON.stringify({ reviewStatus: 'approved' }),
   })
   if (json.code === 200) {
-    note.reviewStatus = 'approved'
-    note.reviewReason = null
-  } else if (PREVIEW_MODE) {
     note.reviewStatus = 'approved'
     note.reviewReason = null
   } else {
@@ -580,13 +533,10 @@ async function confirmReject(note) {
     return
   }
   const json = await request(`/api/admin/notes/${note.noteId}/review`, {
-    method: 'PATCH',
+    method: 'PUT',
     body: JSON.stringify({ reviewStatus: 'rejected', reviewReason: reason }),
   })
   if (json.code === 200) {
-    note.reviewStatus = 'rejected'
-    note.reviewReason = reason
-  } else if (PREVIEW_MODE) {
     note.reviewStatus = 'rejected'
     note.reviewReason = reason
   } else {
@@ -609,13 +559,11 @@ function startEditBook(book) {
 
 async function saveBook(book) {
   const json = await request(`/api/admin/books/${book.bookId}`, {
-    method: 'PATCH',
+    method: 'PUT',
     body: JSON.stringify(editBookForm.value),
   })
   if (json.code === 200) {
     Object.assign(book, json.data)
-  } else if (PREVIEW_MODE) {
-    Object.assign(book, editBookForm.value)
   } else {
     alert(json.message || '保存失败')
   }
@@ -625,13 +573,17 @@ async function saveBook(book) {
 async function toggleBookStatus(book) {
   const newStatus = book.status === 'active' ? 'inactive' : 'active'
   const json = await request(`/api/admin/books/${book.bookId}`, {
-    method: 'PATCH',
-    body: JSON.stringify({ status: newStatus }),
+    method: 'PUT',
+    body: JSON.stringify({
+      title: book.title,
+      author: book.author,
+      isbn: book.isbn,
+      intro: book.intro,
+      status: newStatus,
+    }),
   })
   if (json.code === 200) {
     book.status = json.data.status
-  } else if (PREVIEW_MODE) {
-    book.status = newStatus
   } else {
     alert(json.message || '操作失败')
   }
@@ -652,15 +604,6 @@ const acquiringId = ref(null) // 正在「交书友」的 bottleId
 const acquiredInteraction = ref({}) // bottleId -> interactionId 缓存
 const requestedBottles = ref({}) // bottleId -> true 已发申请
 
-const previewMatches = [
-  { bottleId: 501, author: { nickname: '晚风读者', avatarPath: '' }, book: { title: '百年孤独', author: '加西亚·马尔克斯' }, contentPreview: '我们总在回忆中重新理解时间。', recommendation: '你们都在时间里打捞记忆。', matchScore: 86.5, noteId: 202 },
-  { bottleId: 502, author: { nickname: '云端旅人', avatarPath: '' }, book: { title: '百年孤独', author: '加西亚·马尔克斯' }, contentPreview: '孤独是布恩迪亚家族逃不掉的宿命。', recommendation: '你们都在思考孤独与宿命。', matchScore: 78.0, noteId: 203 },
-  { bottleId: 503, author: { nickname: '林间书虫', avatarPath: '' }, book: { title: '活着', author: '余华' }, contentPreview: '苦难中的人，反而活得最用力。', recommendation: '你们对「活着」有相近的理解。', matchScore: 64.2, noteId: 204 },
-  { bottleId: 504, author: { nickname: '夜读人', avatarPath: '' }, book: { title: '三体', author: '刘慈欣' }, contentPreview: '给岁月以文明，而不是给文明以岁月。', recommendation: '你们都向往宏大的文明尺度。', matchScore: 51.8, noteId: 205 },
-  { bottleId: 505, author: { nickname: '晨雾书友', avatarPath: '' }, book: { title: '活着', author: '余华' }, contentPreview: '命运再苦，也要把日子过下去。', recommendation: '你们都看重人在苦难里的韧劲。', matchScore: 45.3, noteId: 206 },
-  { bottleId: 506, author: { nickname: '星河读者', avatarPath: '' }, book: { title: '三体', author: '刘慈欣' }, contentPreview: '宇宙很大，人类很渺小。', recommendation: '你们都习惯把视角拉到宇宙尺度。', matchScore: 38.6, noteId: 207 },
-]
-
 async function enterMatch() {
   currentPage.value = 'match'
   matchStep.value = 'select'
@@ -680,13 +623,8 @@ async function loadMatchNotes() {
         bookTitle: n.book?.title,
         content: n.content,
       }))
-    } else if (PREVIEW_MODE) {
-      matchNotes.value = previewNotes.filter((n) => n.isPublic && n.reviewStatus === 'approved')
     }
   } catch (e) {
-    if (PREVIEW_MODE) {
-      matchNotes.value = previewNotes.filter((n) => n.isPublic && n.reviewStatus === 'approved')
-    }
   } finally {
     matchNotesLoading.value = false
   }
@@ -709,17 +647,8 @@ async function loadMatches() {
     if (json.code === 200) {
       matchItems.value = json.data.list || []
       matchTotal.value = json.data.total || 0
-    } else if (PREVIEW_MODE) {
-      const start = (matchPage.value - 1) * matchPageSize
-      matchItems.value = previewMatches.slice(start, start + matchPageSize)
-      matchTotal.value = previewMatches.length
     }
   } catch (e) {
-    if (PREVIEW_MODE) {
-      const start = (matchPage.value - 1) * matchPageSize
-      matchItems.value = previewMatches.slice(start, start + matchPageSize)
-      matchTotal.value = previewMatches.length
-    }
   } finally {
     matchLoading.value = false
   }
@@ -755,8 +684,6 @@ async function sendFriendRequest(item) {
       const acq = await request(`/api/bottles/${item.bottleId}/acquire`, { method: 'POST' })
       if (acq.code === 200) {
         interactionId = acq.data.myInteraction?.interactionId
-      } else if (PREVIEW_MODE) {
-        interactionId = Date.now()
       } else {
         alert(acq.message || '获取漂流瓶失败')
         return
@@ -770,19 +697,11 @@ async function sendFriendRequest(item) {
     if (fr.code === 200) {
       requestedBottles.value[item.bottleId] = true
       alert('书友申请已发出，等待对方回应')
-    } else if (PREVIEW_MODE) {
-      requestedBottles.value[item.bottleId] = true
-      alert('（预览）书友申请已发出，等待对方回应')
     } else {
       alert(fr.message || '申请失败')
     }
   } catch (e) {
-    if (PREVIEW_MODE) {
-      requestedBottles.value[item.bottleId] = true
-      alert('（预览）书友申请已发出，等待对方回应')
-    } else {
-      alert(e.message || '操作失败')
-    }
+    alert(e.message || '操作失败')
   } finally {
     acquiringId.value = null
   }
@@ -799,40 +718,6 @@ const wallComments = ref({}) // noteId -> Comment[]
 const wallCommentsLoading = ref(false)
 const commentText = ref({}) // noteId -> 输入框文本
 const wallTab = ref('all') // all=全部公开笔记 / favorites=我的收藏
-
-const previewWallNotes = [
-  { noteId: 301, author: { nickname: '晚风读者', avatarPath: '' }, book: { title: '百年孤独' }, content: '许多年之后，面对行刑队，奥雷里亚诺·布恩迪亚上校将会回想起父亲带他去见识冰块的那个遥远的下午。\n\n开头就把过去、现在、未来折叠在一起。', likeCount: 12, favoriteCount: 5, commentCount: 2, isLiked: false, isFavorited: false, createdAt: '2026-09-07' },
-  { noteId: 302, author: { nickname: '云端旅人', avatarPath: '' }, book: { title: '三体' }, content: '给岁月以文明，而不是给文明以岁月。\n\n把文明的尺度拉到宇宙级别。', likeCount: 8, favoriteCount: 3, commentCount: 1, isLiked: true, isFavorited: false, createdAt: '2026-09-06' },
-  { noteId: 303, author: { nickname: '林间书虫', avatarPath: '' }, book: { title: '活着' }, content: '人是为了活着本身而活着，而不是为了活着之外的任何事物而活着。\n\n这句话回答了整本书的题眼。', likeCount: 20, favoriteCount: 9, commentCount: 3, isLiked: false, isFavorited: true, createdAt: '2026-09-05' },
-  { noteId: 304, author: { nickname: '山间读者', avatarPath: '' }, book: { title: '围城' }, content: '婚姻是一座围城，城外的人想进去，城里的人想出来。\n\n不止婚姻，人生处处是围城。', likeCount: 6, favoriteCount: 2, commentCount: 1, isLiked: false, isFavorited: false, createdAt: '2026-09-07' },
-  { noteId: 305, author: { nickname: '星河读者', avatarPath: '' }, book: { title: '平凡的世界' }, content: '生活不能等待别人来安排，要自己去争取和奋斗。\n\n孙少平让我看到平凡人身上的光。', likeCount: 15, favoriteCount: 7, commentCount: 2, isLiked: true, isFavorited: false, createdAt: '2026-09-08' },
-  { noteId: 306, author: { nickname: '晨雾书友', avatarPath: '' }, book: { title: '小王子' }, content: '真正重要的东西，用眼睛是看不见的，要用心去看。\n\n长大了才读懂这句话。', likeCount: 9, favoriteCount: 4, commentCount: 1, isLiked: false, isFavorited: false, createdAt: '2026-09-08' },
-]
-
-const previewWallComments = {
-  301: [
-    { commentId: 701, noteId: 301, author: { nickname: '星河读者', avatarPath: '' }, content: '这段关于时间的理解很有意思。', createdAt: '2026-09-08', canDelete: false },
-    { commentId: 702, noteId: 301, author: { nickname: '晨雾书友', avatarPath: '' }, content: '我也是被这个开头震撼到了。', createdAt: '2026-09-08', canDelete: false },
-  ],
-  302: [
-    { commentId: 703, noteId: 302, author: { nickname: '夜读人', avatarPath: '' }, content: '这句真的是全书的灵魂。', createdAt: '2026-09-07', canDelete: false },
-  ],
-  303: [
-    { commentId: 704, noteId: 303, author: { nickname: '晚风读者', avatarPath: '' }, content: '读完久久不能平静。', createdAt: '2026-09-06', canDelete: false },
-    { commentId: 705, noteId: 303, author: { nickname: '山间读者', avatarPath: '' }, content: '余华写得太狠了。', createdAt: '2026-09-06', canDelete: false },
-    { commentId: 706, noteId: 303, author: { nickname: '云端旅人', avatarPath: '' }, content: '活着本身就是意义。', createdAt: '2026-09-05', canDelete: false },
-  ],
-  304: [
-    { commentId: 707, noteId: 304, author: { nickname: '林间书虫', avatarPath: '' }, content: '围城这个比喻太精妙了。', createdAt: '2026-09-08', canDelete: false },
-  ],
-  305: [
-    { commentId: 708, noteId: 305, author: { nickname: '晚风读者', avatarPath: '' }, content: '孙少平真的是平凡人的英雄。', createdAt: '2026-09-08', canDelete: false },
-    { commentId: 709, noteId: 305, author: { nickname: '云端旅人', avatarPath: '' }, content: '路遥的文字很有力量。', createdAt: '2026-09-08', canDelete: false },
-  ],
-  306: [
-    { commentId: 710, noteId: 306, author: { nickname: '星河读者', avatarPath: '' }, content: '小王子永远是我的治愈之书。', createdAt: '2026-09-08', canDelete: false },
-  ],
-}
 
 async function enterWall() {
   currentPage.value = 'wall'
@@ -860,29 +745,15 @@ async function loadWall() {
       if (json.code === 200) {
         wallNotes.value = json.data.list || []
         wallTotal.value = json.data.total || 0
-      } else if (PREVIEW_MODE) {
-        wallNotes.value = previewWallNotes.filter(n => n.isFavorited)
-        wallTotal.value = wallNotes.value.length
       }
     } else {
       const json = await request(`/api/wall/notes?pageNum=${wallPage.value}&pageSize=${wallPageSize}`)
       if (json.code === 200) {
         wallNotes.value = json.data.list || []
         wallTotal.value = json.data.total || 0
-      } else if (PREVIEW_MODE) {
-        wallNotes.value = [...previewWallNotes]
-        wallTotal.value = previewWallNotes.length
       }
     }
   } catch (e) {
-    if (PREVIEW_MODE) {
-      if (wallTab.value === 'favorites') {
-        wallNotes.value = previewWallNotes.filter(n => n.isFavorited)
-      } else {
-        wallNotes.value = [...previewWallNotes]
-      }
-      wallTotal.value = wallNotes.value.length
-    }
   } finally {
     wallLoading.value = false
   }
@@ -903,19 +774,11 @@ async function toggleLike(note) {
     const json = await request(`/api/notes/${note.noteId}/like`, { method })
     if (json.code === 200) {
       applySocial(note, json.data)
-    } else if (PREVIEW_MODE) {
-      note.isLiked = !note.isLiked
-      note.likeCount += note.isLiked ? 1 : -1
     } else {
       alert(json.message || '操作失败')
     }
   } catch (e) {
-    if (PREVIEW_MODE) {
-      note.isLiked = !note.isLiked
-      note.likeCount += note.isLiked ? 1 : -1
-    } else {
-      alert(e.message || '操作失败')
-    }
+    alert(e.message || '操作失败')
   }
 }
 
@@ -925,19 +788,11 @@ async function toggleFavorite(note) {
     const json = await request(`/api/notes/${note.noteId}/favorite`, { method })
     if (json.code === 200) {
       applySocial(note, json.data)
-    } else if (PREVIEW_MODE) {
-      note.isFavorited = !note.isFavorited
-      note.favoriteCount += note.isFavorited ? 1 : -1
     } else {
       alert(json.message || '操作失败')
     }
   } catch (e) {
-    if (PREVIEW_MODE) {
-      note.isFavorited = !note.isFavorited
-      note.favoriteCount += note.isFavorited ? 1 : -1
-    } else {
-      alert(e.message || '操作失败')
-    }
+    alert(e.message || '操作失败')
   }
   pruneFavorites()
 }
@@ -959,13 +814,8 @@ async function toggleComments(note) {
     const json = await request(`/api/notes/${note.noteId}/comments?pageSize=100`)
     if (json.code === 200) {
       wallComments.value[note.noteId] = json.data.list || []
-    } else if (PREVIEW_MODE) {
-      wallComments.value[note.noteId] = [...(previewWallComments[note.noteId] || [])]
     }
   } catch (e) {
-    if (PREVIEW_MODE) {
-      wallComments.value[note.noteId] = [...(previewWallComments[note.noteId] || [])]
-    }
   } finally {
     wallCommentsLoading.value = false
   }
@@ -988,18 +838,6 @@ async function submitComment(note) {
       if (wallComments.value[note.noteId]) {
         wallComments.value[note.noteId].unshift(json.data)
       }
-    } else if (PREVIEW_MODE) {
-      commentText.value[note.noteId] = ''
-      note.commentCount += 1
-      if (!wallComments.value[note.noteId]) wallComments.value[note.noteId] = []
-      wallComments.value[note.noteId].unshift({
-        commentId: Date.now(),
-        noteId: note.noteId,
-        author: { nickname: currentUser?.nickname || '我', avatarPath: '' },
-        content: text,
-        createdAt: '刚刚',
-        canDelete: true,
-      })
     } else {
       alert(json.message || '评论失败')
     }
@@ -1011,7 +849,7 @@ async function submitComment(note) {
 async function deleteComment(note, comment) {
   try {
     const json = await request(`/api/comments/${comment.commentId}`, { method: 'DELETE' })
-    if (json.code === 200 || PREVIEW_MODE) {
+    if (json.code === 200) {
       note.commentCount -= 1
       wallComments.value[note.noteId] = (wallComments.value[note.noteId] || []).filter(
         (c) => c.commentId !== comment.commentId
@@ -1020,14 +858,7 @@ async function deleteComment(note, comment) {
       alert(json.message || '删除失败')
     }
   } catch (e) {
-    if (PREVIEW_MODE) {
-      note.commentCount -= 1
-      wallComments.value[note.noteId] = (wallComments.value[note.noteId] || []).filter(
-        (c) => c.commentId !== comment.commentId
-      )
-    } else {
-      alert(e.message || '删除失败')
-    }
+    alert(e.message || '删除失败')
   }
 }
 
@@ -1039,16 +870,6 @@ const friendRequests = ref([])
 const friendRequestsLoading = ref(false)
 const friendPendingCount = ref(0) // 待处理的「收到的申请」数，用于顶栏红点
 const friendActionId = ref(null) // 正在 accept/reject 的 requestId
-
-const previewFriends = [
-  { user: { userId: 2, nickname: '晚风读者', avatarPath: '' }, becameFriendsAt: '2026-09-07' },
-  { user: { userId: 3, nickname: '云端旅人', avatarPath: '' }, becameFriendsAt: '2026-09-05' },
-]
-
-const previewFriendRequests = [
-  { requestId: 601, requester: { userId: 4, nickname: '山间读者', avatarPath: '' }, receiver: { userId: 1 }, bottleId: 501, status: 'pending', createdAt: '2026-09-08', handledAt: null },
-  { requestId: 602, requester: { userId: 5, nickname: '晨雾书友', avatarPath: '' }, receiver: { userId: 1 }, bottleId: 502, status: 'pending', createdAt: '2026-09-08', handledAt: null },
-]
 
 async function enterFriends() {
   currentPage.value = 'friends'
@@ -1072,11 +893,8 @@ async function loadFriends() {
     const json = await request('/api/me/friends?pageNum=1&pageSize=100')
     if (json.code === 200) {
       friendsList.value = json.data.list || []
-    } else if (PREVIEW_MODE) {
-      friendsList.value = [...previewFriends]
     }
   } catch (e) {
-    if (PREVIEW_MODE) friendsList.value = [...previewFriends]
   } finally {
     friendsLoading.value = false
   }
@@ -1089,15 +907,8 @@ async function loadFriendRequests() {
     if (json.code === 200) {
       friendRequests.value = json.data.list || []
       friendPendingCount.value = json.data.total || friendRequests.value.length
-    } else if (PREVIEW_MODE) {
-      friendRequests.value = [...previewFriendRequests]
-      friendPendingCount.value = friendRequests.value.length
     }
   } catch (e) {
-    if (PREVIEW_MODE) {
-      friendRequests.value = [...previewFriendRequests]
-      friendPendingCount.value = friendRequests.value.length
-    }
   } finally {
     friendRequestsLoading.value = false
   }
@@ -1109,11 +920,8 @@ async function refreshFriendBadge() {
     const json = await request('/api/me/friend-requests?direction=received&status=pending&pageSize=1')
     if (json.code === 200) {
       friendPendingCount.value = json.data.total || 0
-    } else if (PREVIEW_MODE) {
-      friendPendingCount.value = previewFriendRequests.length
     }
   } catch (e) {
-    if (PREVIEW_MODE) friendPendingCount.value = previewFriendRequests.length
   }
 }
 
@@ -1133,21 +941,11 @@ async function handleFriendRequest(item, status) {
       } else {
         alert('已拒绝')
       }
-    } else if (PREVIEW_MODE) {
-      friendRequests.value = friendRequests.value.filter((r) => r.requestId !== item.requestId)
-      friendPendingCount.value = friendRequests.value.length
-      if (status === 'accepted') loadFriends()
     } else {
       alert(json.message || '操作失败')
     }
   } catch (e) {
-    if (PREVIEW_MODE) {
-      friendRequests.value = friendRequests.value.filter((r) => r.requestId !== item.requestId)
-      friendPendingCount.value = friendRequests.value.length
-      if (status === 'accepted') loadFriends()
-    } else {
-      alert(e.message || '操作失败')
-    }
+    alert(e.message || '操作失败')
   } finally {
     friendActionId.value = null
   }
@@ -1157,17 +955,13 @@ async function removeFriend(item) {
   if (!confirm(`确定解除与「${item.user.nickname}」的书友关系？`)) return
   try {
     const json = await request(`/api/me/friends/${item.user.userId}`, { method: 'DELETE' })
-    if (json.code === 200 || PREVIEW_MODE) {
+    if (json.code === 200) {
       friendsList.value = friendsList.value.filter((f) => f.user.userId !== item.user.userId)
     } else {
       alert(json.message || '操作失败')
     }
   } catch (e) {
-    if (PREVIEW_MODE) {
-      friendsList.value = friendsList.value.filter((f) => f.user.userId !== item.user.userId)
-    } else {
-      alert(e.message || '操作失败')
-    }
+    alert(e.message || '操作失败')
   }
 }
 </script>
@@ -1223,7 +1017,6 @@ async function removeFriend(item) {
       <p v-if="loginRole === 'user'" class="switch" @click="isRegister = !isRegister">
         {{ isRegister ? '已有账号？去登录' : '没有账号？去注册' }}
       </p>
-      <p class="preview-link" @click="previewHome">（临时）离线预览{{ loginRole === 'admin' ? '管理员界面' : '主页' }}</p>
     </div>
   </div>
 
@@ -1317,6 +1110,7 @@ async function removeFriend(item) {
             </svg>
             <input v-model="searchQuery" type="text" placeholder="搜索书名或作者" />
           </div>
+          <button class="manage-btn" @click="openAddBook">添加</button>
           <button class="manage-btn" :class="{ active: shelfManage }" @click="toggleManage">
             {{ shelfManage ? '完成' : '管理' }}
           </button>
@@ -1382,6 +1176,49 @@ async function removeFriend(item) {
 
       <p class="shelf-footer">“读过同一页，就是见过面”</p>
     </main>
+
+    <div v-if="showAddBook" class="match-modal" @click.self="showAddBook = false">
+      <div class="match-modal-card">
+        <button class="modal-close" @click="showAddBook = false">×</button>
+        <h2 class="add-book-title">添加书籍</h2>
+        <p class="add-book-sub">选一本书，标记你的阅读状态</p>
+        <div class="search-box add-book-search">
+          <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <circle cx="11" cy="11" r="7"></circle>
+            <line x1="21" y1="21" x2="16.5" y2="16.5"></line>
+          </svg>
+          <input v-model="addBookQuery" type="text" placeholder="搜索书名或作者" @input="searchAddBooks" />
+        </div>
+        <div class="add-book-list">
+          <div v-for="b in addBookOptions" :key="b.bookId" class="add-book-item" :class="{ 'is-added': shelfStatusMap[b.bookId] }">
+            <span class="add-book-cover">{{ (b.title || '书').slice(0, 1) }}</span>
+            <div class="add-book-info">
+              <h4>
+                {{ b.title }}
+                <span v-if="shelfStatusMap[b.bookId]" class="added-badge">已在{{ statusText[shelfStatusMap[b.bookId]] }}</span>
+              </h4>
+              <p>{{ b.author }}</p>
+            </div>
+            <div class="add-book-actions">
+              <button class="status-mini mini-want" :class="{ active: shelfStatusMap[b.bookId] === 'wantToRead' }" :disabled="addingBookId === b.bookId" @click="addToShelf(b, 'wantToRead')">想读</button>
+              <button class="status-mini mini-reading" :class="{ active: shelfStatusMap[b.bookId] === 'reading' }" :disabled="addingBookId === b.bookId" @click="addToShelf(b, 'reading')">在读</button>
+              <button class="status-mini mini-read" :class="{ active: shelfStatusMap[b.bookId] === 'read' }" :disabled="addingBookId === b.bookId" @click="addToShelf(b, 'read')">已读</button>
+            </div>
+          </div>
+          <div v-if="addBookLoading" class="add-book-loading">
+            <span class="loading-dot"></span>
+            <span>正在搜索…</span>
+          </div>
+          <div v-else-if="addBookOptions.length === 0" class="add-book-empty">
+            <svg class="add-book-empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
+              <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>
+            </svg>
+            <p>没搜到这本书，换个关键词试试</p>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 
   <!-- 书籍详情页 -->
@@ -2073,6 +1910,8 @@ async function removeFriend(item) {
       </section>
     </main>
   </div>
+
+  <div v-if="toastShow" class="toast">{{ toastMsg }}</div>
 </template>
 
 <style scoped>
@@ -2245,13 +2084,6 @@ async function removeFriend(item) {
 }
 .switch:hover {
   color: #7d5233;
-}
-.preview-link {
-  margin-top: 14px;
-  color: #c9bfb2;
-  font-size: 12px;
-  cursor: pointer;
-  text-decoration: underline;
 }
 .form input::placeholder {
   color: #c5b8a6;
@@ -3974,6 +3806,204 @@ async function removeFriend(item) {
   background: #fdf8ef;
   border-left: 3px solid #d9b98a;
   border-radius: 8px;
+}
+.add-book-title {
+  position: relative;
+  margin: 0 0 6px;
+  padding-bottom: 12px;
+  color: #4a3a2a;
+  font-size: 20px;
+  font-family: 'Songti SC', 'STSong', 'SimSun', 'Noto Serif SC', serif;
+}
+.add-book-title::after {
+  content: '';
+  position: absolute;
+  left: 2px;
+  bottom: 0;
+  width: 36px;
+  height: 3px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, #b98a5e, rgba(217, 185, 138, 0.2));
+}
+.add-book-sub {
+  margin: 0 0 16px;
+  font-size: 13px;
+  color: #a58a6e;
+}
+.add-book-search {
+  width: 100%;
+  margin-bottom: 16px;
+}
+.add-book-search input {
+  width: 100%;
+}
+.add-book-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-top: 8px;
+  max-height: 52vh;
+  overflow-y: auto;
+}
+.add-book-item {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 16px;
+  background: #fff;
+  border: 1px solid #efe6d8;
+  border-radius: 14px;
+  transition: transform 0.2s, box-shadow 0.2s, border-color 0.2s;
+}
+.add-book-item:hover {
+  transform: translateY(-2px);
+  border-color: #e0c9a8;
+  box-shadow: 0 8px 20px rgba(139, 94, 60, 0.1);
+}
+.add-book-cover {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 34px;
+  height: 44px;
+  border-radius: 5px;
+  font-family: 'Songti SC', 'STSong', 'SimSun', 'Noto Serif SC', serif;
+  font-size: 17px;
+  color: #fff;
+  background: linear-gradient(160deg, #b98a5e, #8a5c3a);
+  box-shadow: 0 3px 8px rgba(139, 94, 60, 0.18);
+}
+.add-book-info {
+  flex: 1;
+  min-width: 0;
+}
+.add-book-info h4 {
+  margin: 0 0 3px;
+  font-size: 15px;
+  color: #5f4a33;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.add-book-info p {
+  margin: 0;
+  font-size: 12px;
+  color: #a58a6e;
+}
+.add-book-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.status-mini {
+  padding: 6px 12px;
+  border: 1px solid transparent;
+  border-radius: 14px;
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.2s;
+}
+.status-mini:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.mini-want {
+  background: #f7e8d8;
+  color: #c98a5a;
+}
+.mini-want:hover:not(:disabled) {
+  background: #f1d9bf;
+  color: #b8763f;
+}
+.mini-reading {
+  background: #f3e9db;
+  color: #b98a5e;
+}
+.mini-reading:hover:not(:disabled) {
+  background: #ead9c3;
+  color: #9a6a45;
+}
+.mini-read {
+  background: #f0ece6;
+  color: #a08f7a;
+}
+.mini-read:hover:not(:disabled) {
+  background: #e6e1d8;
+  color: #7d6f5c;
+}
+.status-mini.active,
+.status-mini.active:hover:not(:disabled) {
+  background: linear-gradient(135deg, #9a6a45, #7d5233);
+  color: #fff;
+  box-shadow: 0 3px 8px rgba(139, 94, 60, 0.25);
+}
+.add-book-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 24px 0;
+  color: #a58a6e;
+  font-size: 13px;
+}
+.add-book-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 28px 0;
+  text-align: center;
+}
+.add-book-empty-icon {
+  width: 40px;
+  height: 40px;
+  color: #d9b98a;
+}
+.add-book-empty p {
+  margin: 0;
+  font-size: 13px;
+  color: #a58a6e;
+}
+.add-book-item.is-added {
+  border-color: #e0c9a8;
+  background: #fdf9f2;
+}
+.added-badge {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 8px;
+  border-radius: 10px;
+  background: #f3e9db;
+  color: #b98a5e;
+  font-size: 11px;
+  font-weight: normal;
+  vertical-align: middle;
+}
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: 40px;
+  transform: translateX(-50%);
+  z-index: 100;
+  padding: 10px 22px;
+  background: rgba(74, 58, 42, 0.92);
+  color: #fff;
+  font-size: 14px;
+  border-radius: 22px;
+  box-shadow: 0 8px 24px rgba(74, 58, 42, 0.35);
+  animation: toast-in 0.25s ease;
+}
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 10px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
 }
 .match-score-block {
   display: flex;
