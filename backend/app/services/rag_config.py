@@ -18,11 +18,16 @@ class RagConfig:
     match_page_size: int = int(os.getenv("RAG_PAGE_SIZE", "10"))
 
     # matchScore 0~100 的归一化映射（把余弦相似度线性换算到 0~100，绝不虚构）
-    match_low: float = float(os.getenv("MATCH_SCORE_LOW", "0.25"))
-    match_high: float = float(os.getenv("MATCH_SCORE_HIGH", "0.85"))
+    match_low: float = float(os.getenv("MATCH_SCORE_LOW", "0.50"))
+    match_high: float = float(os.getenv("MATCH_SCORE_HIGH", "0.92"))
+
+    # 反馈档位阈值（按 matchScore 0~100，不再按余弦相似度）
+    strong_threshold: float = float(os.getenv("RAG_STRONG", "85"))
+    high_threshold: float = float(os.getenv("RAG_HIGH", "70"))
+    weak_threshold: float = float(os.getenv("RAG_WEAK", "55"))
 
     # 推荐语 只对 Top 多少条生成（避免全池都调 LLM；其余留 null）
-    recommend_top_n: int = int(os.getenv("RECOMMEND_TOP_N", "5"))
+    recommend_top_n: int = int(os.getenv("RAG_TOP_N", "3"))
 
     # embedding
     embedding_dim: int = int(os.getenv("EMBEDDING_DIM", "1024"))

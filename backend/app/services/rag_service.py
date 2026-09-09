@@ -13,7 +13,8 @@ from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional, Set
 
 from .embedding import embed_texts
-from .llm import extract_meta, generate_recommendation
+from .feedback import build_feedback
+from .llm import extract_meta
 from .rag_config import config
 from .vector_store import RagStore
 
@@ -116,13 +117,16 @@ class RagService:
             item["matchScore"] = _score_to_100(item["cosine"])
         ranked.sort(key=lambda i: (-i["matchScore"], -i["rec"]["bottle_id"]))
 
+        # 只保留匹配度较高的人（>= weak），其余视作"未到同频"，不展示
+        ranked = [i for i in ranked if i["matchScore"] >= config.weak_threshold]
+
         items: List[dict] = []
         for idx, item in enumerate(ranked):
             rec = item["rec"]
             top_n = config.recommend_top_n
             rec_text = rec["text"]
             recommendation = (
-                generate_recommendation(source_content, [rec_text], [item["matchScore"]])
+                build_feedback(source_content, rec_text, item["matchScore"], config)
                 if idx < top_n
                 else None
             )
@@ -153,4 +157,3 @@ def _parse(iso: str) -> datetime:
 
 # 模块级单例，方便 B 后端直接 import
 rag = RagService()
-

@@ -65,6 +65,19 @@
 - [ ] C 配合联调、修 embedding 细节
 - [ ] Vibe 日志 ④
 
+#### D3 · C 侧细化（定稿）：匹配只展示高分 + 反馈档位重构
+
+> 需求变更：匹配书友**只出现匹配度较高的人**、按 `matchScore` 降序。原 S/A/B/C（覆盖到"没有匹配"）不再适用，做如下收敛。
+
+- **匹配口径**：`match()` 只保留 `matchScore >= weak(55)` 的候选，按 `matchScore` 降序 → 只出现"匹配度较高的人"。
+- **反馈档位改为按 `matchScore`(0~100) 分档，不再按余弦相似度**：
+  - S（≥85）· 灵魂共振：DeepSeek 个性化推荐语，最热情
+  - A（70~85）· 高相关：DeepSeek 个性化推荐语，语气稍收敛
+  - B（55~70）· 较强相关：模板 + TA 的摘录（正向措辞，"你们在同频处相遇"）
+  - C · 兜底 **只在「列表为空」时用**（鼓励再上传），不再作为逐条推荐语
+- **配置对齐**：`.env` 用 `MATCH_SCORE_LOW/HIGH`（余弦→matchScore 映射）、`RAG_STRONG/HIGH/WEAK`（改成 matchScore 单位 85/70/55）、`RAG_TOP_N`（给几条生成推荐语）。
+- **代码改动**：`llm.py` 暴露公开 `chat`；`feedback.py` 用 matchScore 分档、C 移出逐条、接入 `match()`；`match()` 过滤低分候选并走 `build_feedback`。
+
 ### D4 大后天 · 测试 + 文档 + 读书墙（可选）
 
 - [ ] 补测试、修 bug

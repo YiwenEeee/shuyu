@@ -1,8 +1,8 @@
 """LLM 服务：DeepSeek。
 
-两类 AI 任务（互相独立）：
-  1. extract_meta(content)        —— 上传时实时提取 主体/关键词/情绪（AI 三栏）
-  2. generate_recommendation(...) —— 匹配时生成推荐语（1~100 字）
+两类 AI 入口（互相独立）：
+  1. extract_meta(content) —— 上传时实时提取 主体/关键词/情绪（AI 三栏）
+  2. chat(...)             —— 通用对话入口（供反馈档位 / 推荐语统一调用）
 提供 mock 模式用于无 key 本地验证。
 """
 
@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import json
 import os
-from typing import List, Optional
+from typing import Optional
 
 from .rag_config import config
 
@@ -51,6 +51,11 @@ def _chat(prompt: str, system: Optional[str] = None, max_tokens: int = 0) -> str
     return resp.json()["choices"][0]["message"]["content"].strip()
 
 
+def chat(prompt: str, system: Optional[str] = None, max_tokens: int = 0) -> str:
+    """对外公开的对话入口：供反馈档位 / 推荐语统一调用。"""
+    return _chat(prompt, system=system, max_tokens=max_tokens)
+
+
 def _MOCK_CHAT(prompt: str) -> str:
     # 简化 mock：返回一句示意文本，保证链路可跑
     return "这本书里，你们读到了彼此想说的那一句。"
@@ -78,44 +83,9 @@ def extract_meta(content: str) -> dict:
         raise LLMError(f"AI 元信息返回非 JSON: {out}") from exc
 
 
-def generate_recommendation(
-    source_content: str,
-    candidate_contents: List[str],
-    scores: List[float],
-) -> Optional[str]:
-    """匹配时：基于来源笔记 + 候选原文与相似度，生成推荐语（1~100 字）。
-
-    生成失败返回 None（不影响 matchScore 与排序）。
-    """
-    if not candidate_contents:
-        return None
-    if MOCK:
-        # 演示：返回示意推荐语；可模拟失败返回 None
-        return "你们的文字都关注同一处感受，可以聊聊。"
-
-    system = (
-        "你是一个懂读书、擅长用文字连接同频者的推荐官。"
-        "请用不超过 100 字、真诚有温度地写一段推荐语，说明两个人笔记里的共鸣点。"
-        "不要用『亲』『您』，不要堆砌感叹号。只输出推荐语本身。"
-    )
-    cand_lines = "\n".join(
-        f"- (匹配度 {s:.0f}%) {c[:80]}" for c, s in zip(candidate_contents, scores)
-    )
-    try:
-        return _chat(
-            f"用户 A 的摘录：\n{source_content[:200]}\n\n"
-            f"与TA最相近的用户 B 的摘录：\n{cand_lines}\n\n请写推荐语。",
-            system=system,
-            max_tokens=120,
-        )
-    except LLMError:
-        return None
-
-
 def _strip_code_fence(text: str) -> str:
     if text.startswith("```"):
         text = text.strip("`")
         if text.lower().startswith("json"):
             text = text[4:]
     return text.strip()
-
