@@ -103,14 +103,16 @@
 
 **C 侧接口口径（最终结论）**：`match()` 只返回 `matchScore >= 55` 的候选，按真实分数降序；全量 11 字段；`recommendation` 只对 Top3 生成，其余 `null`；aiStatus 流 `pending → processing → ready / failed`，只有 `ready` 参与匹配。
 
-- [ ] B 直连 `from app.services.rag_service import rag`，审核通过时调 `publish_note`、成功后调 `mark_ai_ready`、匹配接口调 `match`。
-- [ ] B `.env` 填真 key（`SILICONFLOW_API_KEY` / `DEEPSEEK_API_KEY`）、`RAG_MOCK=0`；单 worker（`uvicorn --workers 1`）。
+> ✅ **真实 RAG 核心链路联调已通过（B 反馈 · 2026-09-09）**：`analyze_note` 返回真实三栏；审核通过公开笔记后 `publish_note → mark_ai_ready` 成功；`GET /api/bottles/matches` 返回真实候选（`matchScore=82.4`、`aiStatus=ready`、DeepSeek 推荐语正常）；C 向量记录已与 SQLite `bottleId` 对齐；真 key + `RAG_MOCK=0` + 单 worker。
+
+- [x] B 直连 `from app.services.rag_service import rag`，审核通过时调 `publish_note`、成功后调 `mark_ai_ready`、匹配接口调 `match`。
+- [x] B `.env` 填真 key（`SILICONFLOW_API_KEY` / `DEEPSEEK_API_KEY`）、`RAG_MOCK=0`；单 worker（`uvicorn --workers 1`）。
 - [ ] B 捕获 `EmbeddingError` → 该笔记 `aiStatus=failed`。
-- [ ] C 验收：`/api/health` 通。
-- [ ] C 验收：`POST /api/notes` 返回 `noteId` + `topics/keywords/sentiment`。
-- [ ] C 验收：审核通过入池后 `aiStatus=processing`，`mark_ai_ready` 后 `ready`。
-- [ ] C 验收：`GET /api/bottles/matches` 只返回 `matchScore>=55`、降序、11 字段、Top3 有 `recommendation`。
-- [ ] C 验收：`ready` 之前匹配查不到，之后才出现。
+- [x] C 验收：`/api/health` 通。
+- [x] C 验收：`POST /api/notes` 返回 `noteId` + `topics/keywords/sentiment`。
+- [x] C 验收：审核通过入池后 `aiStatus=processing`，`mark_ai_ready` 后 `ready`。
+- [x] C 验收：`GET /api/bottles/matches` 只返回 `matchScore>=55`、降序、11 字段、Top3 有 `recommendation`。
+- [x] C 验收：`ready` 之前匹配查不到，之后才出现。
 - [ ] 对齐 A：只展示 ≥55；`recommendation` 可空；`noteId` 绑交互、`bottleId` 是漂流瓶 ID。
 - [ ] 提醒：mock 模式返回空（mock 相似度被 ≥55 过滤），演示用真实模式。
 - [ ] Vibe 日志 ④。
