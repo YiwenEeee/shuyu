@@ -78,6 +78,27 @@
 - **配置对齐**：`.env` 用 `MATCH_SCORE_LOW/HIGH`（余弦→matchScore 映射）、`RAG_STRONG/HIGH/WEAK`（改成 matchScore 单位 85/70/55）、`RAG_TOP_N`（给几条生成推荐语）。
 - **代码改动**：`llm.py` 暴露公开 `chat`；`feedback.py` 用 matchScore 分档、C 移出逐条、接入 `match()`；`match()` 过滤低分候选并走 `build_feedback`。
 
+#### D3 · 联调接口信息（B 提供 · 上传笔记）
+
+**上传笔记接口**：`POST http://10.180.24.176:8000/api/notes`
+
+- 请求头：`Authorization: Bearer <登录返回的 token>`、`Content-Type: application/json`
+- 最小请求体：
+
+  ```json
+  { "bookId": 2, "content": "自由不是想做什么就做什么……", "isPublic": true }
+  ```
+
+  `author` / `book` **无需前端/C 传**，后端从 Bearer Token 推导作者、按 `bookId` 查书籍。
+- 可选传 AI 三栏 `{ topics, keywords, sentiment }`；正常联调不传，后端上传时会立即提取并返回。
+- 成功响应重点字段：
+
+  ```json
+  { "code": 200, "data": { "noteId": 123, "author": { "userId": 1, "nickname": "联调读者", "avatarPath": "..." }, "book": { "bookId": 2, "title": "书名", "author": "作者" }, "bookId": 2, "content": "…", "isPublic": true, "reviewStatus": "pending", "topics": [], "keywords": [], "sentiment": "neu" } }
+  ```
+
+**C 侧流程（关键）**：上传后 `reviewStatus` 恒为 `pending`；公开笔记经管理员审核 `approved` 后，后端才创建 `aiStatus=pending` 的漂流瓶；C 完成向量化后再标记为 `ready`，才能被匹配接口查到。
+
 ### D4 大后天 · 测试 + 文档 + 读书墙（可选）
 
 - [ ] 补测试、修 bug
