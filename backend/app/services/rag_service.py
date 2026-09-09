@@ -120,13 +120,20 @@ class RagService:
         # 只保留匹配度较高的人（>= weak），其余视作"未到同频"，不展示
         ranked = [i for i in ranked if i["matchScore"] >= config.weak_threshold]
 
+        # 记录来源昵称，用于推荐语里称呼对方（避免模型把占位符 A/B 当名字输出）
+        source_rec = self.store.get(source_note_id) or {}
+        source_nick = (source_rec.get("author") or {}).get("nickname")
+
         items: List[dict] = []
         for idx, item in enumerate(ranked):
             rec = item["rec"]
             top_n = config.recommend_top_n
             rec_text = rec["text"]
+            cand_nick = (rec.get("author") or {}).get("nickname")
             recommendation = (
-                build_feedback(source_content, rec_text, item["matchScore"], config)
+                build_feedback(
+                    source_nick, cand_nick, source_content, rec_text, item["matchScore"], config
+                )
                 if idx < top_n
                 else None
             )
