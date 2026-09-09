@@ -1025,7 +1025,10 @@ async function removeFriend(item) {
     <header class="topbar">
       <div class="brand">书遇</div>
       <div class="user-area">
-        <span class="user-avatar">{{ (currentUser?.nickname || currentUser?.username || '书').slice(0, 1) }}</span>
+        <span class="user-avatar">
+          {{ (currentUser?.nickname || currentUser?.username || '书').slice(0, 1) }}
+          <img v-if="currentUser?.avatarPath" class="avatar-img" :src="currentUser.avatarPath" alt="" @error="$event.target.remove()" />
+        </span>
         <span class="username">{{ currentUser?.nickname || currentUser?.username }}</span>
         <button class="friend-btn" @click="enterFriends()">
           <svg class="friend-btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -1078,7 +1081,10 @@ async function removeFriend(item) {
     <header class="topbar">
       <div class="brand">书遇</div>
       <div class="user-area">
-        <span class="user-avatar">{{ (currentUser?.nickname || currentUser?.username || '书').slice(0, 1) }}</span>
+        <span class="user-avatar">
+          {{ (currentUser?.nickname || currentUser?.username || '书').slice(0, 1) }}
+          <img v-if="currentUser?.avatarPath" class="avatar-img" :src="currentUser.avatarPath" alt="" @error="$event.target.remove()" />
+        </span>
         <span class="username">{{ currentUser?.nickname || currentUser?.username }}</span>
         <button class="friend-btn" @click="enterFriends()">
           <svg class="friend-btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -1226,7 +1232,10 @@ async function removeFriend(item) {
     <header class="topbar">
       <div class="brand">书遇</div>
       <div class="user-area">
-        <span class="user-avatar">{{ (currentUser?.nickname || currentUser?.username || '书').slice(0, 1) }}</span>
+        <span class="user-avatar">
+          {{ (currentUser?.nickname || currentUser?.username || '书').slice(0, 1) }}
+          <img v-if="currentUser?.avatarPath" class="avatar-img" :src="currentUser.avatarPath" alt="" @error="$event.target.remove()" />
+        </span>
         <span class="username">{{ currentUser?.nickname || currentUser?.username }}</span>
         <button class="friend-btn" @click="enterFriends()">
           <svg class="friend-btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -1282,7 +1291,10 @@ async function removeFriend(item) {
     <header class="topbar">
       <div class="brand">书遇</div>
       <div class="user-area">
-        <span class="user-avatar">{{ (currentUser?.nickname || currentUser?.username || '书').slice(0, 1) }}</span>
+        <span class="user-avatar">
+          {{ (currentUser?.nickname || currentUser?.username || '书').slice(0, 1) }}
+          <img v-if="currentUser?.avatarPath" class="avatar-img" :src="currentUser.avatarPath" alt="" @error="$event.target.remove()" />
+        </span>
         <span class="username">{{ currentUser?.nickname || currentUser?.username }}</span>
         <button class="friend-btn" @click="enterFriends()">
           <svg class="friend-btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -1453,7 +1465,10 @@ async function removeFriend(item) {
     <header class="topbar">
       <div class="brand">书遇</div>
       <div class="user-area">
-        <span class="user-avatar">{{ (currentUser?.nickname || currentUser?.username || '书').slice(0, 1) }}</span>
+        <span class="user-avatar">
+          {{ (currentUser?.nickname || currentUser?.username || '书').slice(0, 1) }}
+          <img v-if="currentUser?.avatarPath" class="avatar-img" :src="currentUser.avatarPath" alt="" @error="$event.target.remove()" />
+        </span>
         <span class="username">{{ currentUser?.nickname || currentUser?.username }}</span>
         <button class="friend-btn" @click="enterFriends()">
           <svg class="friend-btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -1524,7 +1539,10 @@ async function removeFriend(item) {
           >
             <span class="match-score-badge" :class="matchLevel(item.matchScore).cls">{{ item.matchScore }}%</span>
             <div class="match-card-top">
-              <span class="match-avatar">{{ (item.author?.nickname || '书').slice(0, 1) }}</span>
+              <span class="match-avatar">
+                {{ (item.author?.nickname || '书').slice(0, 1) }}
+                <img v-if="item.author?.avatarPath" class="avatar-img" :src="item.author.avatarPath" alt="" @error="$event.target.remove()" />
+              </span>
               <div class="match-card-info">
                 <span class="match-card-name">{{ item.author?.nickname || '匿名书友' }}</span>
                 <span class="match-card-book">{{ item.book?.title }}</span>
@@ -1551,7 +1569,10 @@ async function removeFriend(item) {
       <div class="match-modal-card">
         <button class="modal-close" @click="closeMatch">×</button>
         <div class="match-modal-head">
-          <span class="match-avatar big">{{ (openedMatch.author?.nickname || '书').slice(0, 1) }}</span>
+          <span class="match-avatar big">
+            {{ (openedMatch.author?.nickname || '书').slice(0, 1) }}
+            <img v-if="openedMatch.author?.avatarPath" class="avatar-img" :src="openedMatch.author.avatarPath" alt="" @error="$event.target.remove()" />
+          </span>
           <div>
             <div class="match-modal-name">{{ openedMatch.author?.nickname || '匿名书友' }}</div>
             <div class="match-modal-book">{{ openedMatch.book?.title }}</div>
@@ -1592,7 +1613,10 @@ async function removeFriend(item) {
     <header class="topbar">
       <div class="brand">书遇</div>
       <div class="user-area">
-        <span class="user-avatar">{{ (currentUser?.nickname || currentUser?.username || '书').slice(0, 1) }}</span>
+        <span class="user-avatar">
+          {{ (currentUser?.nickname || currentUser?.username || '书').slice(0, 1) }}
+          <img v-if="currentUser?.avatarPath" class="avatar-img" :src="currentUser.avatarPath" alt="" @error="$event.target.remove()" />
+        </span>
         <span class="username">{{ currentUser?.nickname || currentUser?.username }}</span>
         <button class="friend-btn" @click="enterFriends()">
           <svg class="friend-btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -1628,7 +1652,10 @@ async function removeFriend(item) {
       <div v-else class="wall-list">
         <article v-for="n in wallNotes" :key="n.noteId" class="wall-card">
           <div class="wall-card-head">
-            <span class="wall-avatar">{{ (n.author?.nickname || '书').slice(0, 1) }}</span>
+            <span class="wall-avatar">
+              {{ (n.author?.nickname || '书').slice(0, 1) }}
+              <img v-if="n.author?.avatarPath" class="avatar-img" :src="n.author.avatarPath" alt="" @error="$event.target.remove()" />
+            </span>
             <div class="wall-author">
               <span class="wall-nickname">{{ n.author?.nickname || '匿名书友' }}</span>
               <span class="wall-meta">{{ n.book?.title }} · {{ n.createdAt }}</span>
@@ -1665,7 +1692,10 @@ async function removeFriend(item) {
             <div v-else-if="!(wallComments[n.noteId] || []).length" class="wall-comments-empty">还没有评论，来抢沙发</div>
             <div v-else class="wall-comment-list">
               <div v-for="c in wallComments[n.noteId]" :key="c.commentId" class="wall-comment-item">
-                <span class="wall-comment-avatar">{{ (c.author?.nickname || '书').slice(0, 1) }}</span>
+                <span class="wall-comment-avatar">
+                  {{ (c.author?.nickname || '书').slice(0, 1) }}
+                  <img v-if="c.author?.avatarPath" class="avatar-img" :src="c.author.avatarPath" alt="" @error="$event.target.remove()" />
+                </span>
                 <div class="wall-comment-body">
                   <div class="wall-comment-head">
                     <span class="wall-comment-name">{{ c.author?.nickname || '匿名' }}</span>
@@ -1695,7 +1725,10 @@ async function removeFriend(item) {
     <header class="topbar">
       <div class="brand">书遇</div>
       <div class="user-area">
-        <span class="user-avatar">{{ (currentUser?.nickname || currentUser?.username || '书').slice(0, 1) }}</span>
+        <span class="user-avatar">
+          {{ (currentUser?.nickname || currentUser?.username || '书').slice(0, 1) }}
+          <img v-if="currentUser?.avatarPath" class="avatar-img" :src="currentUser.avatarPath" alt="" @error="$event.target.remove()" />
+        </span>
         <span class="username">{{ currentUser?.nickname || currentUser?.username }}</span>
         <button class="friend-btn" @click="enterFriends()">
           <svg class="friend-btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -1745,7 +1778,10 @@ async function removeFriend(item) {
         </div>
         <div v-else class="friends-list">
           <div v-for="f in friendsList" :key="f.user.userId" class="friend-card">
-            <span class="friend-avatar">{{ (f.user.nickname || '书').slice(0, 1) }}</span>
+            <span class="friend-avatar">
+              {{ (f.user.nickname || '书').slice(0, 1) }}
+              <img v-if="f.user?.avatarPath" class="avatar-img" :src="f.user.avatarPath" alt="" @error="$event.target.remove()" />
+            </span>
             <div class="friend-info">
               <span class="friend-name">{{ f.user.nickname }}</span>
               <span class="friend-meta">{{ f.becameFriendsAt }} 成为书友</span>
@@ -1763,7 +1799,10 @@ async function removeFriend(item) {
         </div>
         <div v-else class="friends-list">
           <div v-for="r in friendRequests" :key="r.requestId" class="friend-card">
-            <span class="friend-avatar">{{ (r.requester.nickname || '书').slice(0, 1) }}</span>
+            <span class="friend-avatar">
+              {{ (r.requester.nickname || '书').slice(0, 1) }}
+              <img v-if="r.requester?.avatarPath" class="avatar-img" :src="r.requester.avatarPath" alt="" @error="$event.target.remove()" />
+            </span>
             <div class="friend-info">
               <span class="friend-name">{{ r.requester.nickname }}</span>
               <span class="friend-meta">{{ r.createdAt }} 想与你成为书友</span>
@@ -1783,7 +1822,10 @@ async function removeFriend(item) {
     <header class="topbar">
       <div class="brand">书遇</div>
       <div class="user-area">
-        <span class="user-avatar">{{ (currentUser?.nickname || currentUser?.username || '书').slice(0, 1) }}</span>
+        <span class="user-avatar">
+          {{ (currentUser?.nickname || currentUser?.username || '书').slice(0, 1) }}
+          <img v-if="currentUser?.avatarPath" class="avatar-img" :src="currentUser.avatarPath" alt="" @error="$event.target.remove()" />
+        </span>
         <span class="username">{{ currentUser?.nickname || currentUser?.username }}</span>
         <button class="logout-btn" @click="logout">退出</button>
       </div>
@@ -2145,6 +2187,21 @@ async function removeFriend(item) {
   color: #fff;
   font-size: 15px;
   flex-shrink: 0;
+}
+.user-avatar,
+.match-avatar,
+.wall-avatar,
+.wall-comment-avatar,
+.friend-avatar {
+  position: relative;
+  overflow: hidden;
+}
+.avatar-img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 .username {
   color: #8a7a68;

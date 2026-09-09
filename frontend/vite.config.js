@@ -11,6 +11,10 @@ export default defineConfig({
         target: 'http://10.180.24.176:8000',
         changeOrigin: true,
       },
+      '/uploads': {
+        target: 'http://10.180.24.176:8000',
+        changeOrigin: true,
+      },
     },
   },
 })
