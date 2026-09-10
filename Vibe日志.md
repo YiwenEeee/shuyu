@@ -29,7 +29,7 @@ const currentPage = ref('login')
 
 ### 迭代 2：登录/注册真实鉴权
 
-- **① 本次迭代目标**：把假登录换成真实鉴权，登录后能区分 user/admin 并按角色跳转。
+- **① 本次迭代目标**：把假登录换成真实鉴权，登录后能区分 user /admin 并按角色跳转。
 - **② 使用的提示词**：
   > 「把登录改成调 `POST /api/auth/login`，body 是 email+password；成功后把返回的 token 存 localStorage，再调 `GET /api/me` 拿 role：role=user 进主页、role=admin 进管理员页；请求统一封装成带 Bearer token 的 request 函数。」
 - **③ AI 生成/输出**：生成了统一 `request()` 封装（自动带 `Authorization: Bearer`），以及登录 → `/api/me` → 按 role 跳转的完整链路。
